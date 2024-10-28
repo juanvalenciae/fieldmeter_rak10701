@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """Usage:
     fieldmeter.py [options] SUB_TOPIC PUB_TOPIC
 
@@ -24,7 +25,6 @@ import json
 import warnings
 from datetime import datetime
 from paho.mqtt.client import Client, MQTTMessage
-from paho.mqtt.enums import CallbackAPIVersion
 from lib.docopt import docopt
 from sys import stderr, stdout
 from os import environ
@@ -67,11 +67,11 @@ def get_response_payload(up_payload: dict, seq_id: int = sequence_id) -> str:
 def on_message_decorator(func, pub_topic: str, qos: int=0, *args):
     return func(*args)
 
-def on_connect(_, userdata, conn_flags, reason_code, properties):
+def on_connect(_, userdata, conn_flags, reason_code):
     printlog("connect event %s" % reason_code)
     pass
 
-def on_subscribe(client, userdata, mid, reason_code, properties):
+def on_subscribe(client, userdata, mid, reason_code):
     printlog("subscribe event %s" % reason_code)
     pass
 
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     pub_qos = int(args["--pub-qos"])
     out_file = open(args["--output"], "a")
 
-    mqttc = Client(CallbackAPIVersion.VERSION2)
+    mqttc = Client()
     mqttc.on_connect = on_connect
     mqttc.on_subscribe = on_subscribe
     mqttc.on_message = on_message_creator(args["PUB_TOPIC"], pub_qos, out_file)

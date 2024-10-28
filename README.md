@@ -25,11 +25,20 @@ Environment:
         overwrite password
 ```
 
-## Run the script on the gateway
+## Set-up the script on RAK gateways
 
 Use scp to copy `main.py` and `lib/docopt.py` on the RAK gateway as follows:
 
 ```
-scp -O main.py root@<gw_ip>:/root
+scp -O main.py root@<gw_ip>:/root/fieldmeter.py
 scp -Or lib root@<gw_ip>:/root
+scp -O rak_setup.sh root@<gw_ip>//etc/init.d/fieldmeter
+```
+
+With all the files are transfered execute the following command through ssh:
+```
+ssh root@<gw_ip>
+chmod a+x /etc/init.d/fieldmeter
+/etc/init.d/fieldmeter enable
+/etc/init.d/fieldmeter start
 ```
