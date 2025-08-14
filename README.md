@@ -30,9 +30,9 @@ Environment:
 Use scp to copy `main.py` and `lib/docopt.py` on the RAK gateway as follows:
 
 ```
-scp -O main.py root@<gw_ip>:/root/fieldmeter.py
-scp -Or lib root@<gw_ip>:/root
-scp -O rak_setup.sh root@<gw_ip>//etc/init.d/fieldmeter
+scp -O main.py scp://root@<gw_ip>//root/fieldmeter.py
+scp -Or lib scp://root@<gw_ip>//root
+scp -O rak_setup.sh scp://root@<gw_ip>//etc/init.d/fieldmeter
 ```
 
 With all the files are transfered execute the following command through ssh:
