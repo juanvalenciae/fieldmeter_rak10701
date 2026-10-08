@@ -22,12 +22,14 @@ Environment:
 """
 
 import json
+from math import pi, sin, cos, acos
 import warnings
 from datetime import datetime
 from paho.mqtt.client import Client, MQTTMessage
 from lib.docopt import docopt
 from sys import stderr, stdout
 from os import environ
+from base64 import b64encode
 
 global sequence_id
 sequence_id = 0
@@ -39,6 +41,22 @@ def printlog(*args, **kwargs):
     print("%s:" % now.isoformat(), *args, file=stderr, **kwargs)
     pass
 
+def distance(lat1, lon1, lat2, lon2):
+    if (lat1 == lat2) and (lon1 == lon2): return 0;
+
+    rad_lat1 = pi * lat1 / 180
+    rad_lat2 = pi * lat2 / 180
+    theta = lon1 - lon2
+    rad_theta = pi * theta / 180
+    dist = sin(rad_lat1) * sin(rad_lat2) + cos(rad_lat1) * cos(rad_lat2) * cos(rad_theta)
+    if (dist > 1):
+        dist = 1
+    dist = acos(dist)
+    dist = dist * 180 / pi
+    dist = dist * 60 * 1.1515
+    dist = dist * 1.609344
+    return dist
+
 def get_response_payload(up_payload: dict, seq_id: int = sequence_id) -> str:
     n_hostspots = len(up_payload["rxInfo"])
     if n_hostspots <= 0:
@@ -48,10 +66,25 @@ def get_response_payload(up_payload: dict, seq_id: int = sequence_id) -> str:
         min_dist = 0
     else:
         rssi_values = [x['rssi'] for x in up_payload["rxInfo"]]
-        max_rssi = max(max(rssi_values) + 200, 0)
-        min_rssi = max(min(rssi_values) + 200, 0)
-        max_dist = 1
-        min_dist = 1
+
+        try:
+            gw_locs = [x for x in up_payload["rxInfo"]
+                       if "source" not in x["location"].keys()]
+
+            dists_values = [distance(x["location"]["latitude"],
+                                     x["location"]["longitude"],
+                                     up_payload["object"]["latitude"],
+                                     up_payload["object"]["longitude"])
+                            for x in gw_locs]
+
+        except Exception as e:
+            printlog("Error %s: %s" % (e, json.dumps(up_payload)))
+            return
+
+        max_rssi = int(max(max(rssi_values) + 200, 0))
+        min_rssi = int(max(min(rssi_values) + 200, 0))
+        max_dist = max(int(min(dists_values) * 1000 / 250), 1)
+        min_dist = max(int(max(dists_values) * 1000 / 250), 1)
 
     bytes_list = [
             seq_id % 255,
@@ -62,7 +95,8 @@ def get_response_payload(up_payload: dict, seq_id: int = sequence_id) -> str:
             n_hostspots
             ]
     out_bytes = bytes(bytes_list)
-    return out_bytes.hex()
+    printlog("downlink payload: %s" % out_bytes.hex())
+    return out_bytes
 
 def on_message_decorator(func, pub_topic: str, qos: int=0, *args):
     return func(*args)
@@ -79,14 +113,19 @@ def on_message_creator(pub_topic: str, pub_qos: int = 0, fp = stdout):
     def on_message(client: Client, _, msg: MQTTMessage):
         msg_string = msg.payload.decode("utf-8")
         try:
+
             json_data = json.loads(msg_string)
-            metadata_keys = ["fCnt", "fPort", "adr", "data_encode"]
-            metadata = tuple(json_data[i] for i in metadata_keys) +\
-                    tuple(json_data["txInfo"][i] for i in ["frequency", "dr"])
-            printlog("message event: fCnt=%d fPort=%d adr=%s data_encode=%s freq=%s dr=%s" % metadata)
+            if json_data["fPort"] != 1: return
+            metadata_keys = ["fCnt", "fPort", "adr", "data", "object"]
+            metadata = tuple(json_data[i] for i in metadata_keys)
+
+            printlog("message event: fCnt=%d fPort=%d adr=%s data_encode=%s obj=%s" % metadata)
             #json.dump(json_data, stdout, indent=2)
-            msg_payload = get_response_payload(json_data)
-            mqtt_response = {"confirmed": False, "data": msg_payload, "fPort": 2}
+            msg_payload = b64encode(get_response_payload(json_data)).decode()
+            mqtt_response = {"confirmed": False,
+                             "data": msg_payload,
+                             "fPort": 2,
+                             "devEui": json_data["deviceInfo"]["devEui"]}
             client.publish(
                     pub_topic,
                     json.dumps(mqtt_response),
