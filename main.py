@@ -29,7 +29,7 @@ from paho.mqtt.client import Client, MQTTMessage
 from lib.docopt import docopt
 from sys import stderr, stdout
 from os import environ
-from base64 import b64encode
+from base64 import b64encode, b64decode
 
 global sequence_id
 sequence_id = 0
@@ -109,6 +109,45 @@ def on_subscribe(client, userdata, mid, reason_code):
     printlog("subscribe event %s" % reason_code)
     pass
 
+def payload_decode(payload: bytes):
+    out = dict()
+    lon_sign = -1 if ((payload[0] >> 7) & 0x1) else 1
+    lat_sign = -1 if ((payload[0] >> 6) & 0x1) else 1
+
+    enc_lat = ((payload[0] & 0x3f) << 17) + \
+              (payload[1] << 9) + \
+              (payload[2] << 1) + \
+              (payload[3] >> 7)
+
+    enc_lon = ((payload[3] & 0x3f) << 16) + \
+              (payload[4] << 8) + \
+              (payload[5])
+
+    hdop = payload[8] / 10
+    sats = payload[9]
+
+    max_hdop = 2
+    min_sats = 5
+
+    if (hdop < max_hdop) and (sats >= min_sats):
+        out["latitude"] = lat_sign * (enc_lat * 108 + 53) / 10000000
+        out["longitude"] = lon_sign * (enc_lon * 215 + 107) / 10000000
+        out["altitude"] = ((payload[6] << 8) + payload[7]) - 1000
+        out["accuracy"] = (hdop * 5 + 5) / 10
+        out["hdop"] = hdop
+        out["sats"] = sats
+    else:
+        out["error"] = "Need more GPS precision (hdop must be < %d " \
+                       "& sats must be >= %d) current hdop: %d & sats: %d" \
+                       % (max_hdop, min_sats, hdop, sats)
+        out["latitude"] = lat_sign * (enc_lat * 108 + 53) / 10000000
+        out["longitude"] = lon_sign * (enc_lon * 215 + 107) / 10000000
+        out["altitude"] = ((payload[6] << 8) + payload[7]) - 1000
+        out["accuracy"] = (hdop * 5 + 5) / 10
+        out["hdop"] = hdop
+        out["sats"] = sats
+    return out
+
 def on_message_creator(pub_topic: str, pub_qos: int = 0, fp = stdout):
     def on_message(client: Client, _, msg: MQTTMessage):
         msg_string = msg.payload.decode("utf-8")
@@ -116,10 +155,17 @@ def on_message_creator(pub_topic: str, pub_qos: int = 0, fp = stdout):
 
             json_data = json.loads(msg_string)
             if json_data["fPort"] != 1: return
-            metadata_keys = ["fCnt", "fPort", "adr", "data", "object"]
-            metadata = tuple(json_data[i] for i in metadata_keys)
 
-            printlog("message event: fCnt=%d fPort=%d adr=%s data_encode=%s obj=%s" % metadata)
+            data_bytes = b64decode(json_data["data"])
+            decoded_payload = payload_decode(data_bytes)
+
+            metadata_keys = ["fCnt", "fPort", "adr", "data"]
+            metadata = list(json_data[i] for i in metadata_keys)
+            metadata.append(json.dumps(decoded_payload))
+
+            json_data["object"] = decoded_payload
+
+            printlog("message event: fCnt=%d fPort=%d adr=%s data_encode=%s obj=%s" % tuple(metadata))
             #json.dump(json_data, stdout, indent=2)
             msg_payload = b64encode(get_response_payload(json_data)).decode()
             mqtt_response = {"confirmed": False,
