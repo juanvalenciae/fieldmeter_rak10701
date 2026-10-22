@@ -83,8 +83,12 @@ def get_response_payload(up_payload: dict, seq_id: int = sequence_id) -> str:
 
         max_rssi = int(max(max(rssi_values) + 200, 0))
         min_rssi = int(max(min(rssi_values) + 200, 0))
-        max_dist = max(int(min(dists_values) * 1000 / 250), 1)
-        min_dist = max(int(max(dists_values) * 1000 / 250), 1)
+        #printlog(f"{json.dumps(up_payload)=}")
+        if len(dists_values) > 0:
+            max_dist = max(int(min(dists_values) * 1000 / 250), 1)
+            min_dist = max(int(max(dists_values) * 1000 / 250), 1)
+        else:
+            max_dist = min_dist = 1
 
     bytes_list = [
             seq_id % 255,
@@ -177,7 +181,6 @@ def on_message_creator(pub_topic: str, pub_qos: int = 0, fp = stdout):
                     json.dumps(mqtt_response),
                     qos=pub_qos,
                     )
-            print(msg_payload, file=fp)
 
         except json.JSONDecodeError:
             printlog("error: unable to decode '%s'", msg_string)
@@ -192,7 +195,7 @@ if __name__ == "__main__":
     passwd = args["--password"] if not environ.get("FIELDMETER_PASSWD") else str(environ.get("FIELDMETER_PASSWD"))
     sub_qos = int(args["--sub-qos"])
     pub_qos = int(args["--pub-qos"])
-    out_file = open(args["--output"], "a")
+    out_file = stdout if args["--output"] else open(args["--output"], "a")
 
     mqttc = Client()
     mqttc.on_connect = on_connect
