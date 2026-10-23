@@ -6,7 +6,7 @@ User=%u
 Type=simple
 Environment=PYTHONBUFFERED=1 FIELDMETER_BROKER_IP=127.0.0.1 FIELDMETER_USER=apolo_gw FIELDMETER_PASSWD=xxxx FIELDMETER_APP_ID=ffffffff-0000-aaaa-1111-cccccccccccc
 ExecStart=fieldmeter_rak10701 application/${FIELDMETER_APP_ID}/device/%i/event/up \
-                              application/${FIELDMETER_APP_ID}/device/%i/comand/down
+                              application/${FIELDMETER_APP_ID}/device/%i/command/down
 StandardOutput=syslog+console
 StandardError=syslog+console
 Restart=on-failure
