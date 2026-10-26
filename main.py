@@ -4,6 +4,7 @@
 
 Options:
     -h --help                       Show this message
+    -t --tls                        Use TLS/SSL for mqtt connections
     -b URL --broker=URL             Set the broker url [default: 127.0.0.1]
     -P PORT --port=PORT             Select the broker port [default: 1883]
     -u USER --username=USER         Set the username [default: user]
@@ -79,7 +80,6 @@ def get_response_payload(up_payload: dict, seq_id: int = sequence_id) -> str:
 
         except Exception as e:
             printlog("Error %s: %s" % (e, json.dumps(up_payload)))
-            return
 
         max_rssi = int(max(max(rssi_values) + 200, 0))
         min_rssi = int(max(min(rssi_values) + 200, 0))
@@ -198,6 +198,8 @@ if __name__ == "__main__":
     out_file = stdout if args["--output"] else open(args["--output"], "a")
 
     mqttc = Client()
+    if args["--tls"]:
+        mqttc.tls_set()
     mqttc.on_connect = on_connect
     mqttc.on_subscribe = on_subscribe
     mqttc.on_message = on_message_creator(args["PUB_TOPIC"], pub_qos, out_file)
